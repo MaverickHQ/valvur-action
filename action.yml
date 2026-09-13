@@ -44,6 +44,13 @@ inputs:
   jobs:
     description: How many Scanners run at once. Empty for all of them.
     default: ""
+  verify:
+    description: >-
+      Install cosign so the package-name index's signature is verified when it is
+      fetched (`signature: verified` in the update's output). Without it the index
+      is still fetched over TLS and checked against its digests, and the update
+      says the signature was not verified.
+    default: "true"
   version:
     description: >-
       The valvur version to install from PyPI (0.3.0 or later: `gate`, `budget` and
@@ -84,6 +91,10 @@ runs:
           python3 -m pip install --quiet --user --break-system-packages "$spec"
         fi
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+    - name: Install cosign, so the index signature is verified
+      if: inputs.verify == 'true'
+      uses: sigstore/cosign-installer@d7543c93d881b35a8faa02e8e3605f69b7a1ce62 # v3.10.0
 
     - name: Restore the package-name index between runs
       # The index is ~120MB on disk and refreshed daily; the vulnerability database

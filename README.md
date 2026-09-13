@@ -37,6 +37,7 @@ was too old to be evidence or that never inspected part of the tree.
 | `sarif` | `true` | Upload to code scanning (needs `security-events: write`) |
 | `budget` | *(none)* | Seconds the Scanners may take together; past it the run is reported incomplete with the cut Scanners named |
 | `jobs` | *(all)* | Scanners at once |
+| `verify` | `true` | Install cosign so the name index's signature is verified on fetch |
 | `version` | `0.3.0` | valvur version from PyPI (0.3.0 or later), or a `git+https://…` source; empty uses the `valvur` on PATH |
 
 ## Outputs
