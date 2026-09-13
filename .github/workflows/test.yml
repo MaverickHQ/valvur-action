@@ -1,0 +1,64 @@
+name: test
+
+# The action against itself, on every change: once where the gate must fail (the
+# fixture pins PyYAML 5.1, which has critical advisories) and once where it must
+# not (gate off, outputs read). Code scanning upload is exercised by valvur's own
+# repository, which uses this action on every commit; a private repository has no
+# code scanning to upload to.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gate-fails-on-the-fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - id: scan
+        uses: ./
+        continue-on-error: true
+        with:
+          path: fixture
+          fail-on: critical
+          sarif: "false"
+          # Until valvur 0.3.0 is on PyPI, the shim with `gate` is on main.
+          version: git+https://github.com/MaverickHQ/valvur@main
+      - name: The gate failed, and the outputs say why
+        env:
+          OUTCOME: ${{ steps.scan.outcome }}
+          STATUS: ${{ steps.scan.outputs.status }}
+          COMPLETE: ${{ steps.scan.outputs.complete }}
+          ACTIVE: ${{ steps.scan.outputs.active }}
+        run: |
+          echo "outcome=$OUTCOME status=$STATUS complete=$COMPLETE active=$ACTIVE"
+          test "$OUTCOME" = "failure"
+          test "$STATUS" = "findings"
+          test "$COMPLETE" = "true"
+          test "$ACTIVE" -ge 5
+
+  outputs-without-the-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - id: scan
+        uses: ./
+        with:
+          path: fixture
+          gate: "false"
+          sarif: "false"
+          budget: "240"
+          jobs: "4"
+          version: git+https://github.com/MaverickHQ/valvur@main
+      - name: The scan ran, the result is complete, nothing left the runner
+        env:
+          RESULTS: ${{ steps.scan.outputs.results }}
+          COMPLETE: ${{ steps.scan.outputs.complete }}
+        run: |
+          test "$COMPLETE" = "true"
+          test -f "$RESULTS/SUMMARY.md"
+          test -f "$RESULTS/results.sarif"
+          python3 -c "import json,sys; n=json.load(open('$RESULTS/run.json'))['network']; print(n); sys.exit(0 if n['what_left_the_machine']=='nothing' else 1)"

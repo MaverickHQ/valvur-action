@@ -1,0 +1,149 @@
+name: valvur
+description: >-
+  Scan a repository with valvur — local, offline, read-only, no account — and gate
+  on the result. Scanners run in one container; nothing leaves the runner.
+author: MaverickHQ
+branding:
+  icon: shield
+  color: gray-dark
+
+inputs:
+  path:
+    description: Directory to scan, relative to the workspace.
+    default: "."
+  profile:
+    description: >-
+      `offline` (the default) runs every Scanner that works with no network access.
+      `full` adds a second advisory source and first-publish age, which send package
+      names to public registries.
+    default: offline
+  fail-on:
+    description: >-
+      Lowest severity of an active finding that fails the gate — critical, high,
+      medium, low, or `any` (every active finding, what valvur's own release gate uses).
+    default: high
+  no-inconclusive:
+    description: >-
+      Also fail a scan whose data was too old to be evidence, or that never inspected
+      part of the tree, instead of letting it pass by omission.
+    default: "false"
+  gate:
+    description: Run `valvur gate` after the scan and fail the job on its verdict.
+    default: "true"
+  sarif:
+    description: >-
+      Upload `results.sarif` to code scanning. Needs `security-events: write` on the
+      job, and code scanning enabled (free on public repositories).
+    default: "true"
+  budget:
+    description: >-
+      Seconds the Scanners may take together. Past it nothing new starts, what is
+      running is stopped, and the result is reported incomplete with the cut
+      Scanners named. Empty for no budget.
+    default: ""
+  jobs:
+    description: How many Scanners run at once. Empty for all of them.
+    default: ""
+  version:
+    description: >-
+      The valvur version to install from PyPI (0.3.0 or later: `gate`, `budget` and
+      `jobs` arrived there), or a `git+https://…` source. Empty means a `valvur`
+      already on PATH — how valvur's own repository scans the tree under test.
+    default: "0.3.0"
+
+outputs:
+  status:
+    description: "`findings`, `clean` or `inconclusive`."
+    value: ${{ steps.read.outputs.status }}
+  complete:
+    description: "`true` when every Scanner completed."
+    value: ${{ steps.read.outputs.complete }}
+  active:
+    description: Active findings — not suppressed, not valvur's own coverage notes.
+    value: ${{ steps.read.outputs.active }}
+  results:
+    description: The Results Folder, `<path>/.security-scan`.
+    value: ${{ steps.read.outputs.results }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install valvur
+      if: inputs.version != ''
+      shell: bash
+      env:
+        VALVUR_VERSION: ${{ inputs.version }}
+      run: |
+        case "$VALVUR_VERSION" in
+          git+*) spec="$VALVUR_VERSION" ;;
+          *)     spec="valvur==${VALVUR_VERSION}" ;;
+        esac
+        if command -v pipx >/dev/null 2>&1; then
+          pipx install --quiet "$spec"
+        else
+          python3 -m pip install --quiet --user --break-system-packages "$spec"
+        fi
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+    - name: Restore the package-name index between runs
+      # The index is ~120MB on disk and refreshed daily; the vulnerability database
+      # is 1.3GB and refetched each run (about 30s). Saved under a fresh key every
+      # run so the newest state is what the next run restores.
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/valvur/names
+        key: valvur-name-index-${{ github.run_id }}
+        restore-keys: valvur-name-index-
+
+    - name: Fetch the image, the vulnerability database and the name index
+      shell: bash
+      run: valvur update
+
+    - name: Scan
+      shell: bash
+      env:
+        VALVUR_PATH: ${{ inputs.path }}
+        VALVUR_PROFILE: ${{ inputs.profile }}
+        VALVUR_BUDGET: ${{ inputs.budget }}
+        VALVUR_JOBS_INPUT: ${{ inputs.jobs }}
+      run: |
+        args=()
+        if [ -n "$VALVUR_BUDGET" ]; then args+=(--budget "$VALVUR_BUDGET"); fi
+        if [ -n "$VALVUR_JOBS_INPUT" ]; then args+=(--jobs "$VALVUR_JOBS_INPUT"); fi
+        valvur scan "$VALVUR_PATH" --profile "$VALVUR_PROFILE" "${args[@]}"
+
+    - name: Read the result
+      id: read
+      shell: bash
+      env:
+        VALVUR_PATH: ${{ inputs.path }}
+      run: |
+        python3 - <<'PY' >> "$GITHUB_OUTPUT"
+        import json, os, pathlib
+        results = pathlib.Path(os.environ["VALVUR_PATH"]) / ".security-scan"
+        run = json.loads((results / "run.json").read_text())
+        counts = run.get("findings") or {}
+        print(f"status={run.get('status')}")
+        print(f"complete={str(bool(run.get('complete'))).lower()}")
+        print(f"active={counts.get('active', 0) if isinstance(counts, dict) else counts}")
+        print(f"results={results}")
+        PY
+
+    - name: Upload results.sarif to code scanning
+      if: inputs.sarif == 'true'
+      uses: github/codeql-action/upload-sarif@faaca9a8f6edddba5725ffe5adefdab6669a2eca # v3.38.0
+      with:
+        sarif_file: ${{ steps.read.outputs.results }}/results.sarif
+        category: valvur
+
+    - name: Gate
+      if: inputs.gate == 'true'
+      shell: bash
+      env:
+        VALVUR_PATH: ${{ inputs.path }}
+        VALVUR_FAIL_ON: ${{ inputs.fail-on }}
+        VALVUR_NO_INCONCLUSIVE: ${{ inputs.no-inconclusive }}
+      run: |
+        flags=()
+        if [ "$VALVUR_NO_INCONCLUSIVE" = "true" ]; then flags+=(--no-inconclusive); fi
+        valvur gate "$VALVUR_PATH" --fail-on "$VALVUR_FAIL_ON" "${flags[@]}"

@@ -1,0 +1,3 @@
+# Deliberately vulnerable pins, so the action's own CI has something to gate on.
+PyYAML==5.1
+urllib3==1.24.1
