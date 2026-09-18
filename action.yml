@@ -94,7 +94,7 @@ runs:
 
     - name: Install cosign, so the index signature is verified
       if: inputs.verify == 'true'
-      uses: sigstore/cosign-installer@d7543c93d881b35a8faa02e8e3605f69b7a1ce62 # v3.10.0
+      uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
     - name: Restore the package-name index between runs
       # The index is ~120MB on disk and refreshed daily; the vulnerability database
@@ -142,7 +142,7 @@ runs:
 
     - name: Upload results.sarif to code scanning
       if: inputs.sarif == 'true'
-      uses: github/codeql-action/upload-sarif@faaca9a8f6edddba5725ffe5adefdab6669a2eca # v3.38.0
+      uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
       with:
         sarif_file: ${{ steps.read.outputs.results }}/results.sarif
         category: valvur
