@@ -7,6 +7,13 @@ name: test
 # was just proven. Code scanning upload is exercised by valvur's own repository,
 # which uses this action on every commit with `version: ""` (the shim from the
 # tree under test), so a valvur change that breaks the action is found there first.
+#
+# On both Ubuntu images GitHub offers, named rather than `ubuntu-latest`: a
+# composite action has no runner of its own — it runs on the caller's — and
+# `ubuntu-latest` moves from 24.04 to 26.04 over a month from 2026-10-19
+# (actions/runner-images#14748). The shim goes into the runner's own Python
+# through pipx (3.12 on 24.04, 3.14 on 26.04), so the README example is proven on
+# what users will have before they have it.
 on:
   push:
     branches: [main]
@@ -17,7 +24,11 @@ permissions:
 
 jobs:
   gate-fails-on-the-fixture:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-26.04]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: scan
@@ -41,7 +52,11 @@ jobs:
           test "$ACTIVE" -ge 5
 
   outputs-without-the-gate:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-26.04]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: scan
