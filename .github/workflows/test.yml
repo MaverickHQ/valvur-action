@@ -2,9 +2,11 @@ name: test
 
 # The action against itself, on every change: once where the gate must fail (the
 # fixture pins PyYAML 5.1, which has critical advisories) and once where it must
-# not (gate off, outputs read). Code scanning upload is exercised by valvur's own
-# repository, which uses this action on every commit; a private repository has no
-# code scanning to upload to.
+# not (gate off, outputs read). Both install the default `version` from PyPI — the
+# path the README example takes, so a tag is only cut on a commit where that path
+# was just proven. Code scanning upload is exercised by valvur's own repository,
+# which uses this action on every commit with `version: ""` (the shim from the
+# tree under test), so a valvur change that breaks the action is found there first.
 on:
   push:
     branches: [main]
@@ -25,8 +27,6 @@ jobs:
           path: fixture
           fail-on: critical
           sarif: "false"
-          # Until valvur 0.3.0 is on PyPI, the shim with `gate` is on main.
-          version: git+https://github.com/MaverickHQ/valvur@main
       - name: The gate failed, and the outputs say why
         env:
           OUTCOME: ${{ steps.scan.outcome }}
@@ -52,7 +52,6 @@ jobs:
           sarif: "false"
           budget: "240"
           jobs: "4"
-          version: git+https://github.com/MaverickHQ/valvur@main
       - name: The scan ran, the result is complete, nothing left the runner
         env:
           RESULTS: ${{ steps.scan.outputs.results }}

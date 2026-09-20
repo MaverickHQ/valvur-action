@@ -11,7 +11,7 @@ permissions:
   security-events: write     # only for the SARIF upload; drop it with sarif: "false"
 
 steps:
-  - uses: actions/checkout@v5
+  - uses: actions/checkout@v7
   - uses: MaverickHQ/valvur-action@v0
     with:
       fail-on: high
