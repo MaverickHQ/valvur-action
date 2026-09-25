@@ -1,0 +1,9 @@
+# One of the fixture's own deliberately vulnerable pins, suppressed — so the
+# action's test can prove that a suppressed result stays in `results.sarif` on
+# disk and out of the file uploaded to code scanning (`upload_sarif.py`).
+[[suppress]]
+fingerprint = "98858e7f381a6275a65e52ff83b37dda"
+rule = "CVE-2019-20477"
+path = "requirements.txt"
+expires = 2027-09-26
+reason = "A fixture, not a project: PyYAML 5.1 is pinned here on purpose so the gate has something to fail on. This one advisory is accepted so the upload test has a suppressed result to leave out."

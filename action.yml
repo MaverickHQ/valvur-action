@@ -33,7 +33,10 @@ inputs:
   sarif:
     description: >-
       Upload `results.sarif` to code scanning. Needs `security-events: write` on the
-      job, and code scanning enabled (free on public repositories).
+      job, and code scanning enabled (free on public repositories). Suppressed
+      results — accepted risks recorded in `.security-scan.toml` — are left out of
+      the upload: GitHub does not read SARIF `suppressions`, and would show each as
+      an open alert for as long as the decision stood. The file on disk keeps them.
     default: "true"
   budget:
     description: >-
@@ -140,11 +143,27 @@ runs:
         print(f"results={results}")
         PY
 
+    - name: Leave accepted risks out of the upload
+      if: inputs.sarif == 'true'
+      shell: bash
+      env:
+        RESULTS: ${{ steps.read.outputs.results }}
+      # GitHub code scanning does not read SARIF `suppressions` — measured on
+      # valvur's own repository, 2026-09-26: five suppressed results uploaded on
+      # every push since 2026-09-13 (`status: accepted`, `kind: external`), five
+      # open alerts, none ever dismissed, and the SARIF-support page silent on the
+      # property. So a risk `.security-scan.toml` has recorded a decision about
+      # would sit in the Security tab as an open alert for as long as the decision
+      # stood. `results.sarif` on disk keeps every result and its suppression; the
+      # upload carries what the gate would act on, and an alert whose result is
+      # absent from the next upload is closed by GitHub as fixed.
+      run: python3 "$GITHUB_ACTION_PATH/upload_sarif.py" "$RESULTS"
+
     - name: Upload results.sarif to code scanning
       if: inputs.sarif == 'true'
       uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
       with:
-        sarif_file: ${{ steps.read.outputs.results }}/results.sarif
+        sarif_file: ${{ steps.read.outputs.results }}/results.upload.sarif
         category: valvur
 
     - name: Gate

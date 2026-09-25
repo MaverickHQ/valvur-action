@@ -76,3 +76,21 @@ jobs:
           test -f "$RESULTS/SUMMARY.md"
           test -f "$RESULTS/results.sarif"
           python3 -c "import json,sys; n=json.load(open('$RESULTS/run.json'))['network']; print(n); sys.exit(0 if n['what_left_the_machine']=='nothing' else 1)"
+      - name: The upload leaves the fixture's one accepted risk out, and the file on disk keeps it
+        env:
+          RESULTS: ${{ steps.scan.outputs.results }}
+        run: |
+          python3 upload_sarif.py "$RESULTS" | tee upload.txt
+          grep -q "1 suppressed result(s) left out" upload.txt
+          python3 - <<'PY'
+          import json, os
+          results = os.environ["RESULTS"]
+          disk = json.load(open(f"{results}/results.sarif"))["runs"][0]["results"]
+          upload = json.load(open(f"{results}/results.upload.sarif"))["runs"][0]["results"]
+          suppressed = [r for r in disk if r.get("suppressions")]
+          assert len(suppressed) == 1, f"{len(suppressed)} suppressed on disk"
+          assert suppressed[0]["ruleId"] == "CVE-2019-20477", suppressed[0]["ruleId"]
+          assert len(upload) == len(disk) - 1, (len(upload), len(disk))
+          assert not any(r.get("suppressions") for r in upload), "a suppressed result reached the upload"
+          print(f"disk {len(disk)}, upload {len(upload)}: the accepted risk stayed on disk")
+          PY

@@ -34,7 +34,7 @@ was too old to be evidence or that never inspected part of the tree.
 | `fail-on` | `high` | `critical`, `high`, `medium`, `low` or `any` |
 | `no-inconclusive` | `false` | Fail an `inconclusive` scan rather than pass by omission |
 | `gate` | `true` | Run `valvur gate`; `false` to only scan and report |
-| `sarif` | `true` | Upload to code scanning (needs `security-events: write`) |
+| `sarif` | `true` | Upload to code scanning (needs `security-events: write`). Suppressed results are left out of the upload — GitHub does not read SARIF `suppressions` and would show each accepted risk as an open alert; `results.sarif` on disk keeps them |
 | `budget` | *(none)* | Seconds the Scanners may take together; past it the run is reported incomplete with the cut Scanners named |
 | `jobs` | *(all)* | Scanners at once |
 | `verify` | `true` | Install cosign so the name index's signature is verified on fetch |
