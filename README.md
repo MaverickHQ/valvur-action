@@ -33,12 +33,35 @@ was too old to be evidence or that never inspected part of the tree.
 | `profile` | `offline` | `offline` sends nothing anywhere; `full` adds OSV and first-publish age, which send package names to public registries |
 | `fail-on` | `high` | `critical`, `high`, `medium`, `low` or `any` |
 | `no-inconclusive` | `false` | Fail an `inconclusive` scan rather than pass by omission |
+| `new-since` | *(none)* | Fail only on findings this ref does not already have, for example `origin/${{ github.base_ref }}`. Needs valvur 1.7.0 or later and `fetch-depth: 0` on the checkout |
 | `gate` | `true` | Run `valvur gate`; `false` to only scan and report |
 | `sarif` | `true` | Upload to code scanning (needs `security-events: write`). Suppressed results are left out of the upload — GitHub does not read SARIF `suppressions` and would show each accepted risk as an open alert; `results.sarif` on disk keeps them |
 | `budget` | *(none)* | Seconds the Scanners may take together; past it the run is reported incomplete with the cut Scanners named |
 | `jobs` | *(all)* | Scanners at once |
 | `verify` | `true` | Install cosign so the name index's signature is verified on fetch |
 | `version` | `0.3.0` | valvur version from PyPI (0.3.0 or later), or a `git+https://…` source; empty uses the `valvur` on PATH |
+
+## A gate on what a pull request adds
+
+A codebase with findings already cannot adopt a gate that fails on all of them on its
+first day. With `new-since`, the gate fails only on findings the named ref does not
+have. valvur scans that ref's tree itself, read with git's plumbing and never checked
+out, and compares by fingerprint: there is no baseline file to commit.
+
+```yaml
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+  with:
+    fetch-depth: 0          # the base branch's commits, which the gate scans
+    persist-credentials: false
+- uses: MaverickHQ/valvur-action@<commit>
+  with:
+    version: "1.7.0"
+    new-since: origin/${{ github.base_ref }}
+```
+
+An incomplete scan and a lapsed suppression still fail. A finding in a renamed file, or
+a static-analysis finding whose matched text changed, has a new fingerprint and counts
+as new. It needs valvur 1.7.0 or later.
 
 ## Outputs
 

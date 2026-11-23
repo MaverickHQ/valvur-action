@@ -27,6 +27,15 @@ inputs:
       Also fail a scan whose data was too old to be evidence, or that never inspected
       part of the tree, instead of letting it pass by omission.
     default: "false"
+  new-since:
+    description: >-
+      Fail only on findings this ref does not already have — a branch, a tag or a
+      commit, for example the base branch of a pull request, `origin/main`. valvur
+      scans that ref's tree itself, read with git's plumbing and never checked out,
+      and compares by fingerprint; an incomplete scan and a lapsed suppression still
+      fail. Needs valvur 1.7.0 or later, and the ref's commit in the checkout:
+      `fetch-depth: 0` on `actions/checkout`. Empty gates on every finding.
+    default: ""
   gate:
     description: Run `valvur gate` after the scan and fail the job on its verdict.
     default: "true"
@@ -173,7 +182,9 @@ runs:
         VALVUR_PATH: ${{ inputs.path }}
         VALVUR_FAIL_ON: ${{ inputs.fail-on }}
         VALVUR_NO_INCONCLUSIVE: ${{ inputs.no-inconclusive }}
+        VALVUR_NEW_SINCE: ${{ inputs.new-since }}
       run: |
         flags=()
         if [ "$VALVUR_NO_INCONCLUSIVE" = "true" ]; then flags+=(--no-inconclusive); fi
+        if [ -n "$VALVUR_NEW_SINCE" ]; then flags+=(--new-since "$VALVUR_NEW_SINCE"); fi
         valvur gate "$VALVUR_PATH" --fail-on "$VALVUR_FAIL_ON" "${flags[@]}"
